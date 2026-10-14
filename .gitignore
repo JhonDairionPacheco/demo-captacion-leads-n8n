@@ -1,0 +1,10 @@
+# Nada de credenciales en el repositorio: las del webhook y las del CRM van en n8n, no aquí.
+.env
+*.local
+
+# Sistema operativo y editores
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/

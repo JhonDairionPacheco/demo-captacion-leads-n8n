@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agenda Clara · Deja de perder citas por WhatsApp</title>
+<meta name="description" content="Captura, califica y responde tus prospectos automáticamente. Demo de automatización con n8n.">
+<style>
+  :root {
+    --tinta: #111c2b;
+    --tinta-2: #4b5c70;
+    --acento: #2563eb;
+    --acento-2: #1d4ed8;
+    --exito: #0f766e;
+    --borde: #e3e8ef;
+    --suave: #f5f8fc;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--tinta); background: #fff;
+    font: 16px/1.65 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .ancho { width: min(1060px, 100% - 40px); margin-inline: auto; }
+
+  /* ---------------------------------------------------------- encabezado */
+  .hero { padding: 72px 0 64px; background:
+      radial-gradient(1200px 400px at 75% -10%, #dbeafe 0%, transparent 60%), var(--suave); }
+  .hero-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: start; }
+  .pill { display: inline-block; padding: 5px 13px; border-radius: 999px; background: #dbeafe;
+    color: var(--acento-2); font-size: 13px; font-weight: 650; margin-bottom: 18px; }
+  h1 { margin: 0 0 16px; font-size: 44px; line-height: 1.12; letter-spacing: -1.1px; }
+  h1 em { font-style: normal; color: var(--acento); }
+  .bajada { margin: 0 0 26px; font-size: 18.5px; color: var(--tinta-2); }
+  .puntos { margin: 0; padding: 0; list-style: none; }
+  .puntos li { padding-left: 28px; position: relative; margin-bottom: 10px; }
+  .puntos li::before { content: '✓'; position: absolute; left: 0; top: -1px;
+    color: var(--exito); font-weight: 800; }
+
+  /* ---------------------------------------------------------- formulario */
+  .tarjeta { padding: 28px; border: 1px solid var(--borde); border-radius: 16px; background: #fff;
+    box-shadow: 0 12px 32px rgb(17 28 43 / 0.09); }
+  .tarjeta h2 { margin: 0 0 4px; font-size: 20px; }
+  .tarjeta .nota { margin: 0 0 20px; color: var(--tinta-2); font-size: 14px; }
+  label { display: block; margin-bottom: 14px; font-size: 14px; font-weight: 600; }
+  input, select { display: block; width: 100%; margin-top: 5px; padding: 11px 13px; border: 1px solid var(--borde);
+    border-radius: 9px; font: inherit; font-weight: 400; background: #fff; color: inherit; }
+  input:focus, select:focus { outline: 2px solid #bfdbfe; border-color: var(--acento); }
+  button { width: 100%; padding: 14px; border: 0; border-radius: 10px; background: var(--acento);
+    color: #fff; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+  button:hover { background: var(--acento-2); }
+  button:disabled { opacity: 0.6; cursor: progress; }
+  .legal { margin: 14px 0 0; font-size: 12.5px; color: var(--tinta-2); text-align: center; }
+  .aviso { margin: 14px 0 0; padding: 12px 14px; border-radius: 9px; font-size: 14.5px; }
+  .aviso.ok { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+  .aviso.mal { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  .campo-mal input { border-color: #ef4444; }
+
+  /* ---------------------------------------------------------- secciones */
+  section { padding: 64px 0; }
+  h2.titulo { margin: 0 0 8px; font-size: 30px; letter-spacing: -0.6px; text-align: center; }
+  .sub { margin: 0 auto 40px; max-width: 580px; text-align: center; color: var(--tinta-2); }
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .col { padding: 26px; border: 1px solid var(--borde); border-radius: 14px; }
+  .col b { display: block; margin-bottom: 6px; font-size: 17px; }
+  .col p { margin: 0; color: var(--tinta-2); font-size: 15px; }
+  .num { display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: 14px;
+    border-radius: 9px; background: #dbeafe; color: var(--acento-2); font-weight: 800; }
+
+  .flujo { background: var(--suave); }
+  .pasos { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; }
+  .paso { padding: 12px 16px; border: 1px solid var(--borde); border-radius: 11px; background: #fff; font-size: 14.5px; }
+  .paso b { display: block; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--acento); }
+  .sep { color: #9aa8bb; font-size: 20px; }
+
+  footer { padding: 34px 0; border-top: 1px solid var(--borde); color: var(--tinta-2); font-size: 14px; }
+  footer a { color: var(--acento); }
+
+  @media (max-width: 880px) {
+    .hero-grid, .cols { grid-template-columns: 1fr; }
+    .hero { padding: 48px 0 40px; }
+    h1 { font-size: 33px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="ancho hero-grid">
+    <div>
+      <span class="pill">Demo técnica · automatización con n8n</span>
+      <h1>Deja de perder clientes <em>por no contestar a tiempo</em></h1>
+      <p class="bajada">
+        Agenda Clara captura cada prospecto, lo califica solo y avisa a tu equipo en segundos.
+        Los que están listos para comprar llegan primero; el resto entra en seguimiento automático.
+      </p>
+      <ul class="puntos">
+        <li>El prospecto recibe respuesta en menos de un minuto</li>
+        <li>Se clasifica solo según presupuesto y urgencia</li>
+        <li>Queda registrado: nada se pierde en la bandeja de entrada</li>
+      </ul>
+    </div>
+
+    <form class="tarjeta" id="formulario" novalidate>
+      <h2>Pide una demostración</h2>
+      <p class="nota">Te contactamos hoy mismo. Sin compromiso.</p>
+
+      <label>Nombre completo
+        <input name="nombre" autocomplete="name" required>
+      </label>
+      <label>Correo
+        <input name="email" type="email" autocomplete="email" required>
+      </label>
+      <label>WhatsApp
+        <input name="telefono" type="tel" autocomplete="tel" placeholder="300 123 4567" required>
+      </label>
+      <label>Presupuesto mensual
+        <select name="presupuesto" required>
+          <option value="">Selecciona…</option>
+          <option value="menos_500">Menos de USD 500</option>
+          <option value="500_1500">USD 500 – 1.500</option>
+          <option value="mas_1500">Más de USD 1.500</option>
+        </select>
+      </label>
+      <label>¿Para cuándo lo necesitas?
+        <select name="urgencia" required>
+          <option value="">Selecciona…</option>
+          <option value="ya">Ya mismo</option>
+          <option value="mes">Este mes</option>
+          <option value="explorando">Estoy explorando</option>
+        </select>
+      </label>
+
+      <button type="submit" id="enviar">Quiero la demostración</button>
+      <p class="legal">Al enviar aceptas que te contactemos. Puedes pedir la baja cuando quieras.</p>
+      <div id="respuesta"></div>
+    </form>
+  </div>
+</div>
+
+<section>
+  <div class="ancho">
+    <h2 class="titulo">Qué pasa cuando alguien deja sus datos</h2>
+    <p class="sub">Todo esto ocurre solo, en menos de un minuto, sin que nadie esté pendiente.</p>
+    <div class="cols">
+      <div class="col">
+        <div class="num">1</div>
+        <b>Se valida y se limpia</b>
+        <p>Nombre, correo y teléfono quedan normalizados. Si faltan datos, el formulario lo dice al instante en vez de guardar basura.</p>
+      </div>
+      <div class="col">
+        <div class="num">2</div>
+        <b>Se califica solo</b>
+        <p>Según presupuesto y urgencia, el prospecto queda como caliente, tibio o frío. El equipo sabe a quién llamar primero.</p>
+      </div>
+      <div class="col">
+        <div class="num">3</div>
+        <b>Se enruta y se responde</b>
+        <p>Los calientes generan aviso inmediato al equipo. Los tibios entran en seguimiento. Todos reciben confirmación.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="flujo">
+  <div class="ancho">
+    <h2 class="titulo">Cómo está construido</h2>
+    <p class="sub">
+      Esta página es la primera pieza de una automatización completa. El formulario llama a un webhook de
+      n8n que hace el resto.
+    </p>
+    <div class="pasos">
+      <div class="paso"><b>Landing</b>Formulario</div>
+      <span class="sep">→</span>
+      <div class="paso"><b>Webhook</b>n8n</div>
+      <span class="sep">→</span>
+      <div class="paso"><b>Validar</b>y normalizar</div>
+      <span class="sep">→</span>
+      <div class="paso"><b>Calificar</b>caliente / tibio / frío</div>
+      <span class="sep">→</span>
+      <div class="paso"><b>Enrutar</b>aviso o seguimiento</div>
+      <span class="sep">→</span>
+      <div class="paso"><b>CRM</b>registro</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="ancho">
+    Demo técnica. Los datos de este formulario no se usan comercialmente.
+    Código y explicación del flujo en el <a href="./README.md">README del repositorio</a>.
+  </div>
+</footer>
+
+<script>
+  // La URL del webhook de n8n. En n8n: nodo Webhook -> "Production URL".
+  // Se deja como constante para poder cambiarla sin tocar el resto del código.
+  const WEBHOOK = 'https://TU-N8N/webhook/lead';
+
+  const formulario = document.getElementById('formulario');
+  const boton = document.getElementById('enviar');
+  const respuesta = document.getElementById('respuesta');
+
+  const avisar = (texto, clase) => { respuesta.innerHTML = ''; respuesta.append(
+    Object.assign(document.createElement('div'), { className: 'aviso ' + clase, textContent: texto })); };
+
+  formulario.addEventListener('submit', async evento => {
+    evento.preventDefault();
+    respuesta.innerHTML = '';
+
+    // Validación en el navegador: rápida para el usuario. El flujo valida otra vez del lado del
+    // servidor, porque cualquiera puede llamar al webhook sin pasar por esta página.
+    const datos = Object.fromEntries(new FormData(formulario));
+    const falta = Object.entries(datos).filter(([, v]) => !String(v).trim()).map(([k]) => k);
+    if (falta.length) return avisar('Completa todos los campos para continuar.', 'mal');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(datos.email)) return avisar('Revisa el correo: no parece válido.', 'mal');
+
+    boton.disabled = true;
+    boton.textContent = 'Enviando…';
+    try {
+      const r = await fetch(WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...datos, origen: 'landing-demo', enviado_en: new Date().toISOString() }),
+      });
+      if (!r.ok) throw new Error('El servidor respondió ' + r.status);
+      const json = await r.json().catch(() => ({}));
+      formulario.reset();
+      avisar(json.mensaje || '¡Listo! Te contactamos muy pronto.', 'ok');
+    } catch (e) {
+      // Un formulario que falla en silencio pierde el prospecto y nadie se entera
+      avisar('No pudimos enviar tus datos (' + e.message + '). Escríbenos por WhatsApp y lo resolvemos.', 'mal');
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Quiero la demostración';
+    }
+  });
+</script>
+
+</body>
+</html>

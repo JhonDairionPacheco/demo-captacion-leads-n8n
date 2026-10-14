@@ -1,0 +1,4 @@
+# Git deja los finales de línea tal como están. Sin esto, en Windows convierte LF a CRLF al
+# registrar los archivos y después cualquiera que los abra en Linux ve el archivo entero como
+# modificado, aunque nadie haya tocado una línea.
+* -text
