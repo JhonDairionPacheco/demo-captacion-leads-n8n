@@ -1,0 +1,700 @@
+{
+  "id": "k7Qx2mLpDemoLead",
+  "name": "Captación y calificación de prospectos",
+  "versionId": "b0f1c2d3-1111-4111-8111-111111111111",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "nodo-00",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -760,
+        300
+      ],
+      "webhookId": "a1b2c3d4-0000-4000-8000-000000000001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Deja el prospecto en una forma estable antes de decidir nada sobre el.\n// El webhook es una direccion publica: no se puede dar por hecho que los campos lleguen,\n// ni que lleguen escritos como los manda el formulario.\n\nconst cuerpo = $input.item.json.body ?? $input.item.json;\nconst texto = (v) => String(v ?? '').trim();\n\nconst correo = texto(cuerpo.email || cuerpo.correo).toLowerCase();\nconst dominio = correo.includes('@') ? correo.split('@').pop() : '';\n\n// El formulario manda el presupuesto como rango. Si el webhook lo llaman desde otro lado\n// puede venir un numero suelto (\"1800\", \"USD 1.800\"): se acepta igual y se convierte al rango.\nconst crudo = texto(cuerpo.presupuesto).toLowerCase();\nlet presupuesto = ['menos_500', '500_1500', 'mas_1500'].includes(crudo) ? crudo : '';\nif (!presupuesto && /\\d/.test(crudo)) {\n  const n = Number(crudo.replace(/[^\\d]/g, '')) || 0;\n  presupuesto = n >= 1500 ? 'mas_1500' : n >= 500 ? '500_1500' : 'menos_500';\n}\n\nconst urgencias = { ya: 'ya', inmediata: 'ya', mes: 'mes', este_mes: 'mes', explorando: 'explorando' };\nconst urgencia = urgencias[texto(cuerpo.urgencia).toLowerCase()] ?? 'explorando';\n\n// Telefono colombiano: se guarda solo con digitos para que el CRM no tenga tres formatos\n// del mismo numero y los duplicados se puedan detectar.\nconst telefono = texto(cuerpo.telefono).replace(/[^\\d]/g, '').replace(/^57/, '');\n\nconst errores = [];\nif (texto(cuerpo.nombre).length < 2) errores.push('nombre');\n// Validacion de correo a proposito simple: la unica prueba de que un correo existe es\n// escribirle. Aqui solo se descarta lo que claramente no es una direccion.\nif (!/^[^@\\s]+@[^@\\s.]+\\.[^@\\s]{2,}$/.test(correo)) errores.push('email');\nif (telefono.length < 10) errores.push('telefono');\n\nreturn {\n  json: {\n    nombre: texto(cuerpo.nombre),\n    correo,\n    dominio,\n    telefono,\n    presupuesto,\n    urgencia,\n    origen: texto(cuerpo.origen) || 'desconocido',\n    recibido: new Date().toISOString(),\n    valido: errores.length === 0,\n    errores,\n  },\n};"
+      },
+      "id": "nodo-01",
+      "name": "Normalizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "nodo-02",
+      "name": "¿Datos válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, mensaje: \"Faltan datos o están mal escritos.\", campos: $json.errores }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "nodo-03",
+      "name": "Rechazar",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -100,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://dns.google/resolve?name={{ $json.dominio }}&type=MX",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "nodo-04",
+      "name": "Verificar dominio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -100,
+        160
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Calcula la temperatura del prospecto. El puntaje esta a la vista a proposito: un comercial\n// tiene que poder discutir por que un lead quedo frio, y eso no se puede hacer con una caja negra.\n\nconst lead = $('Normalizar').item.json;\nconst dns = $input.item.json;\n\n// dns.google responde Status 0 y una lista Answer cuando el dominio tiene servidores de correo.\n// Si la consulta fallo, el item trae el error en vez de la respuesta: eso es \"no sabemos\",\n// que no es lo mismo que \"el dominio no sirve\". Por eso hay tres estados y no dos.\nconst consultaOk = dns && typeof dns.Status === 'number';\nconst recibeCorreo = consultaOk && Array.isArray(dns.Answer) && dns.Answer.length > 0;\nconst dominioVerificado = consultaOk ? recibeCorreo : null;\n\nconst gratuitos = ['gmail.com', 'hotmail.com', 'hotmail.es', 'outlook.com', 'outlook.es',\n  'yahoo.com', 'yahoo.es', 'icloud.com', 'live.com', 'proton.me', 'protonmail.com'];\nconst corporativo = Boolean(lead.dominio) && !gratuitos.includes(lead.dominio);\n\nconst porPresupuesto = { mas_1500: 40, '500_1500': 25, menos_500: 10 };\nconst porUrgencia = { ya: 30, mes: 20, explorando: 0 };\n\nlet puntos = 0;\nconst porque = [];\n\nconst p = porPresupuesto[lead.presupuesto] ?? 0;\nif (p) { puntos += p; porque.push(`presupuesto ${lead.presupuesto}: +${p}`); }\n\nconst u = porUrgencia[lead.urgencia] ?? 0;\nif (u) { puntos += u; porque.push(`urgencia ${lead.urgencia}: +${u}`); }\n\nif (corporativo) { puntos += 20; porque.push('correo corporativo: +20'); }\n\nlet temperatura = puntos >= 65 ? 'caliente' : puntos >= 35 ? 'tibio' : 'frio';\n\n// Un dominio que comprobadamente no recibe correo casi siempre es un error de digitacion o un\n// dato inventado. Restar puntos no sirve: un presupuesto alto los compensa y el lead sigue\n// saliendo caliente. Por eso es un tope y no una resta: no se manda a un comercial a perseguir\n// a alguien a quien no le vamos a poder escribir.\nif (dominioVerificado === false) {\n  porque.push('el dominio no recibe correo: no puede pasar de tibio');\n  if (temperatura === 'caliente') temperatura = 'tibio';\n}\n\n// Anti-duplicados sin base de datos: n8n conserva datos estaticos del workflow entre ejecuciones.\n// En produccion esto lo resuelve el CRM con una restriccion unica sobre el correo; aqui alcanza\n// para dejar demostrado que el caso esta contemplado y no se crean dos fichas del mismo cliente.\n//\n// Solo cuenta como repetido dentro de una ventana de tiempo. Quien escribio hace tres meses no\n// esta insistiendo: es una oportunidad nueva, y tratarla como duplicado la manda a actualizar un\n// registro viejo en vez de abrir el ciclo otra vez.\nconst VENTANA_MS = 24 * 60 * 60 * 1000;\nconst ahora = Date.now();\nconst memoria = $getWorkflowStaticData('global');\nmemoria.vistos = memoria.vistos ?? {};\n\nconst previo = memoria.vistos[lead.correo];\nconst vigente = previo && (ahora - previo.ultimo) < VENTANA_MS;\nconst veces = vigente ? previo.veces + 1 : 1;\nmemoria.vistos[lead.correo] = { veces, ultimo: ahora };\n\n// La memoria no crece para siempre: se olvidan los correos fuera de la ventana.\nfor (const [correo, dato] of Object.entries(memoria.vistos)) {\n  if (ahora - dato.ultimo >= VENTANA_MS) delete memoria.vistos[correo];\n}\n\nreturn {\n  json: {\n    ...lead,\n    puntos,\n    temperatura,\n    porque,\n    corporativo,\n    dominioVerificado,\n    veces,\n    repetido: veces > 1,\n  },\n};"
+      },
+      "id": "nodo-05",
+      "name": "Calificar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.repetido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "nodo-06",
+      "name": "¿Ya lo teníamos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        360,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a0",
+              "name": "accion",
+              "value": "actualizar_y_avisar",
+              "type": "string"
+            },
+            {
+              "id": "a1",
+              "name": "sla_minutos",
+              "value": "={{ 5 }}",
+              "type": "number"
+            },
+            {
+              "id": "a2",
+              "name": "nota_interna",
+              "value": "=Ya estaba en el CRM y volvió a escribir ({{ $json.veces }} veces). Insistir es señal de compra.",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "mensaje_usuario",
+              "value": "Ya teníamos tus datos. Te escribimos enseguida.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "nodo-07",
+      "name": "Insistió: avisar",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        580,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c1",
+                    "leftValue": "={{ $json.temperatura }}",
+                    "rightValue": "caliente",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "caliente"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c1",
+                    "leftValue": "={{ $json.temperatura }}",
+                    "rightValue": "tibio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "tibio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c1",
+                    "leftValue": "={{ $json.temperatura }}",
+                    "rightValue": "frio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "frío"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "nodo-08",
+      "name": "Enrutar por temperatura",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        580,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a0",
+              "name": "accion",
+              "value": "avisar_comercial",
+              "type": "string"
+            },
+            {
+              "id": "a1",
+              "name": "sla_minutos",
+              "value": "={{ 15 }}",
+              "type": "number"
+            },
+            {
+              "id": "a2",
+              "name": "nota_interna",
+              "value": "Llamar hoy. Presupuesto y urgencia altos.",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "mensaje_usuario",
+              "value": "Listo. Un asesor te llama hoy mismo.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "nodo-09",
+      "name": "Caliente: aviso inmediato",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        820,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a0",
+              "name": "accion",
+              "value": "secuencia_seguimiento",
+              "type": "string"
+            },
+            {
+              "id": "a1",
+              "name": "sla_minutos",
+              "value": "={{ 1440 }}",
+              "type": "number"
+            },
+            {
+              "id": "a2",
+              "name": "nota_interna",
+              "value": "Entra en la secuencia de 3 correos. Revisar si abre.",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "mensaje_usuario",
+              "value": "Gracias. Te enviamos la información y te contactamos esta semana.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "nodo-10",
+      "name": "Tibio: seguimiento",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        820,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a0",
+              "name": "accion",
+              "value": "lista_nutricion",
+              "type": "string"
+            },
+            {
+              "id": "a1",
+              "name": "sla_minutos",
+              "value": "={{ 10080 }}",
+              "type": "number"
+            },
+            {
+              "id": "a2",
+              "name": "nota_interna",
+              "value": "Sin presupuesto o solo explorando. No gastar tiempo comercial todavía.",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "mensaje_usuario",
+              "value": "Gracias. Te enviamos material para que lo revises con calma.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "nodo-11",
+      "name": "Frío: nutrición",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        820,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CRM_URL || \"https://ejemplo.crm/api/prospectos\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "={{ $env.CRM_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "nodo-12",
+      "name": "Registrar en el CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1080,
+        380
+      ],
+      "disabled": true,
+      "onError": "continueRegularOutput",
+      "notes": "Desactivado para que la demo corra sin credenciales. La clave sale de una variable de entorno, nunca del repositorio."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, mensaje: $json.mensaje_usuario, temperatura: $json.temperatura, puntos: $json.puntos, porque: $json.porque, accion: $json.accion, sla_minutos: $json.sla_minutos }) }}",
+        "options": {}
+      },
+      "id": "nodo-13",
+      "name": "Responder al formulario",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1300,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Entrada\nEl formulario llama aquí. El webhook responde con el nodo del final, no de inmediato: así la respuesta lleva el resultado real de la calificación.",
+        "height": 160,
+        "width": 300,
+        "color": 4
+      },
+      "id": "nota-14",
+      "name": "Nota 14",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Por qué se valida otra vez\nEl navegador ya validó, pero esta dirección es pública: cualquiera puede llamarla sin pasar por la página. Lo que viene de afuera no se cree.",
+        "height": 160,
+        "width": 300,
+        "color": 5
+      },
+      "id": "nota-15",
+      "name": "Nota 15",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## El error no pierde el prospecto\nLa salida roja vuelve a *Calificar*. Si la consulta de dominio falla, el lead se guarda igual, marcado como no verificado. Perder un cliente porque falló un servicio secundario es peor que guardarlo incompleto.",
+        "height": 200,
+        "width": 320,
+        "color": 3
+      },
+      "id": "nota-16",
+      "name": "Nota 16",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -140,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Tres rutas, no una bandeja\nEl comercial no tiene que adivinar a quién llamar: el caliente trae SLA de 15 minutos, el tibio entra en secuencia y el frío no gasta tiempo comercial todavía.",
+        "height": 160,
+        "width": 300,
+        "color": 6
+      },
+      "id": "nota-17",
+      "name": "Nota 17",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        790,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar": {
+      "main": [
+        [
+          {
+            "node": "¿Datos válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos válidos?": {
+      "main": [
+        [
+          {
+            "node": "Verificar dominio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rechazar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar dominio": {
+      "main": [
+        [
+          {
+            "node": "Calificar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Calificar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calificar": {
+      "main": [
+        [
+          {
+            "node": "¿Ya lo teníamos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Ya lo teníamos?": {
+      "main": [
+        [
+          {
+            "node": "Insistió: avisar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enrutar por temperatura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrutar por temperatura": {
+      "main": [
+        [
+          {
+            "node": "Caliente: aviso inmediato",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tibio: seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Frío: nutrición",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insistió: avisar": {
+      "main": [
+        [
+          {
+            "node": "Registrar en el CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Caliente: aviso inmediato": {
+      "main": [
+        [
+          {
+            "node": "Registrar en el CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tibio: seguimiento": {
+      "main": [
+        [
+          {
+            "node": "Registrar en el CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Frío: nutrición": {
+      "main": [
+        [
+          {
+            "node": "Registrar en el CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar en el CRM": {
+      "main": [
+        [
+          {
+            "node": "Responder al formulario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}
