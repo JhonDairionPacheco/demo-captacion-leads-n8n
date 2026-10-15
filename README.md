@@ -7,6 +7,16 @@ Es el recorrido que hace cualquier agencia cuando conecta un formulario con un C
 punta a punta y con las decisiones explicadas. Todo lo que hay aquí se puede ejecutar sin pagar
 nada y sin credenciales de ningún servicio.
 
+### ▶ Pruébalo ahora: **[jhondairionpacheco.github.io/demo-captacion-leads-n8n](https://jhondairionpacheco.github.io/demo-captacion-leads-n8n/)**
+
+La página está viva y el formulario llama a un n8n real. Al enviarlo verás, debajo del mensaje de
+gracias, la calificación que acaba de hacer el flujo: la temperatura, los puntos y en qué se basó
+cada uno.
+
+Para que salga **caliente**: un correo con dominio de empresa, presupuesto de más de USD 1.500 y
+*ya mismo*. Para que salga **frío**: Gmail, menos de USD 500 y *estoy explorando*. Si lo envías dos
+veces con el mismo correo, verás el anti-duplicados en acción.
+
 ```mermaid
 flowchart LR
   L["Landing<br/>formulario"] --> W(["Webhook<br/>POST /demo-captacion"])
