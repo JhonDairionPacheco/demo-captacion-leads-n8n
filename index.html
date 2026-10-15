@@ -53,6 +53,21 @@
   .aviso.mal { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
   .campo-mal input { border-color: #ef4444; }
 
+  /* El panel que muestra lo que decidio el flujo. En una landing real esto no se ensena al
+     visitante; aqui es el punto de la demostracion, asi que se marca como tal. */
+  .detras { margin: 12px 0 0; padding: 15px 16px; border: 1px dashed #c7d2e0; border-radius: 11px;
+    background: var(--suave); font-size: 13.5px; }
+  .detras .eti { display: block; margin-bottom: 10px; font-size: 11.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.6px; color: var(--tinta-2); }
+  .temp { display: inline-block; padding: 3px 11px; border-radius: 999px;
+    font-weight: 700; font-size: 12.5px; }
+  .temp.caliente { background: #fee2e2; color: #991b1b; }
+  .temp.tibio    { background: #fef3c7; color: #92400e; }
+  .temp.frio     { background: #dbeafe; color: #1e40af; }
+  .detras .dato { color: var(--tinta-2); margin-left: 9px; }
+  .detras ul { margin: 11px 0 0; padding-left: 19px; color: var(--tinta-2); }
+  .detras li { margin-bottom: 3px; }
+
   /* ---------------------------------------------------------- secciones */
   section { padding: 64px 0; }
   h2.titulo { margin: 0 0 8px; font-size: 30px; letter-spacing: -0.6px; text-align: center; }
@@ -192,7 +207,7 @@
 <script>
   // La URL del webhook de n8n. En n8n: nodo Webhook -> "Production URL".
   // Se deja como constante para poder cambiarla sin tocar el resto del código.
-  const WEBHOOK = 'https://TU-N8N/webhook/lead';
+  const WEBHOOK = 'https://motor.fluxuss.tech/webhook/demo-captacion';
 
   const formulario = document.getElementById('formulario');
   const boton = document.getElementById('enviar');
@@ -200,6 +215,38 @@
 
   const avisar = (texto, clase) => { respuesta.innerHTML = ''; respuesta.append(
     Object.assign(document.createElement('div'), { className: 'aviso ' + clase, textContent: texto })); };
+
+  // Lo que normalmente queda invisible: la calificación que acaba de hacer el flujo y en qué se
+  // basó. Un prospecto tiene que poder discutirse, y eso no se puede hacer con una caja negra.
+  const mostrarDecision = json => {
+    const caja = document.createElement('div');
+    caja.className = 'detras';
+
+    const eti = document.createElement('span');
+    eti.className = 'eti';
+    eti.textContent = 'Lo que acaba de decidir la automatización';
+    caja.append(eti);
+
+    const insignia = document.createElement('span');
+    insignia.className = 'temp ' + json.temperatura;
+    insignia.textContent = json.temperatura;
+    caja.append(insignia);
+
+    const dato = document.createElement('span');
+    dato.className = 'dato';
+    const horas = json.sla_minutos >= 60 ? Math.round(json.sla_minutos / 60) + ' h' : json.sla_minutos + ' min';
+    dato.textContent = `${json.puntos} puntos · respuesta en ${horas}`;
+    caja.append(dato);
+
+    if (Array.isArray(json.porque) && json.porque.length) {
+      const lista = document.createElement('ul');
+      for (const razon of json.porque) {
+        lista.append(Object.assign(document.createElement('li'), { textContent: razon }));
+      }
+      caja.append(lista);
+    }
+    respuesta.append(caja);
+  };
 
   formulario.addEventListener('submit', async evento => {
     evento.preventDefault();
@@ -224,6 +271,7 @@
       const json = await r.json().catch(() => ({}));
       formulario.reset();
       avisar(json.mensaje || '¡Listo! Te contactamos muy pronto.', 'ok');
+      if (json.temperatura) mostrarDecision(json);
     } catch (e) {
       // Un formulario que falla en silencio pierde el prospecto y nadie se entera
       avisar('No pudimos enviar tus datos (' + e.message + '). Escríbenos por WhatsApp y lo resolvemos.', 'mal');

@@ -2,13 +2,13 @@
 # Prueba el flujo contra un n8n que ya lo tenga importado y activo.
 #
 #   ./probar.sh                              # contra http://localhost:5678
-#   ./probar.sh https://mi-n8n.com/webhook/lead
+#   ./probar.sh https://mi-n8n.com/webhook/demo-captacion
 #
 # Son los ocho casos que importan: los tres caminos de calificación, el rechazo, el duplicado,
 # el dominio que no recibe correo, el cuerpo vacío y una entrada que no viene de la landing.
 
 set -u
-URL="${1:-http://localhost:5678/webhook/lead}"
+URL="${1:-http://localhost:5678/webhook/demo-captacion}"
 fallidos=0
 
 # Cada corrida usa correos propios (nombre+1760000000@...). Sin esto, la segunda vez que se

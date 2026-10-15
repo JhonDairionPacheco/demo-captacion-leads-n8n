@@ -9,7 +9,7 @@ nada y sin credenciales de ningún servicio.
 
 ```mermaid
 flowchart LR
-  L["Landing<br/>formulario"] --> W(["Webhook<br/>POST /lead"])
+  L["Landing<br/>formulario"] --> W(["Webhook<br/>POST /demo-captacion"])
   W --> N["Normalizar"]
   N --> V{"¿Datos<br/>válidos?"}
   V -->|no| R400["HTTP 400<br/>con los campos"]

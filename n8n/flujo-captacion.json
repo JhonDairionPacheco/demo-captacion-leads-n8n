@@ -6,7 +6,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "lead",
+        "path": "demo-captacion",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -693,7 +693,9 @@
   },
   "active": false,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "executionTimeout": 60,
+    "saveExecutionProgress": false
   },
   "pinData": {},
   "tags": []

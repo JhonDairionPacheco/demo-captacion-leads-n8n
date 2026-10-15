@@ -7,7 +7,7 @@ decisiones.
 
 ```mermaid
 flowchart LR
-  L["Landing<br/>formulario"] --> W(["Webhook<br/>POST /lead"])
+  L["Landing<br/>formulario"] --> W(["Webhook<br/>POST /demo-captacion"])
   W --> N["Normalizar"]
   N --> V{"¿Datos<br/>válidos?"}
   V -->|no| R400["Responder 400"]
@@ -29,7 +29,7 @@ flowchart LR
 
 ## Entrada
 
-**1 · Webhook** — `POST /lead`. Está en modo *Using Respond to Webhook node*: no contesta al
+**1 · Webhook** — `POST /demo-captacion`. Está en modo *Using Respond to Webhook node*: no contesta al
 recibir, contesta al final. Así la respuesta que ve el visitante lleva el resultado real de su
 calificación y no un "recibido" vacío.
 
@@ -121,19 +121,19 @@ Con el flujo importado y activo:
 
 ```bash
 # Caliente: empresa, presupuesto alto, lo necesita ya
-curl -X POST http://localhost:5678/webhook/lead \
+curl -X POST http://localhost:5678/webhook/demo-captacion \
   -H 'Content-Type: application/json' \
   -d '{"nombre":"Laura Restrepo","email":"laura@clinicasanrafael.com",
        "telefono":"300 123 4567","presupuesto":"mas_1500","urgencia":"ya"}'
 
 # Frío: poco presupuesto y solo mirando
-curl -X POST http://localhost:5678/webhook/lead \
+curl -X POST http://localhost:5678/webhook/demo-captacion \
   -H 'Content-Type: application/json' \
   -d '{"nombre":"Ana Gil","email":"anagil@hotmail.com",
        "telefono":"3205551122","presupuesto":"menos_500","urgencia":"explorando"}'
 
 # Rechazado: faltan datos
-curl -X POST http://localhost:5678/webhook/lead \
+curl -X POST http://localhost:5678/webhook/demo-captacion \
   -H 'Content-Type: application/json' \
   -d '{"nombre":"X","email":"no-es-correo","telefono":"123"}'
 ```
@@ -142,7 +142,7 @@ El script **`probar.sh`** corre esos y cinco más — los ocho casos que importa
 fallaron:
 
 ```
-$ ./probar.sh http://localhost:5678/webhook/lead
+$ ./probar.sh http://localhost:5678/webhook/demo-captacion
 
   ok   Caliente: empresa, presupuesto alto, lo necesita ya  HTTP 200
   ok   Tibio: correo gratuito, presupuesto medio, este mes  HTTP 200
