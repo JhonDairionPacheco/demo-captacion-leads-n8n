@@ -54,7 +54,9 @@ flowchart LR
    Son ocho casos: los tres caminos de calificación, dos rechazos, el duplicado, el dominio que no
    recibe correo y una entrada que no viene del formulario.
 4. **O con la landing**: copia la *Production URL* del nodo Webhook, pégala en `index.html` en la
-   constante `WEBHOOK`, y abre la página.
+   constante `WEBHOOK`, y abre la página. Sirve abriendo el archivo directamente, sin montar un
+   servidor: n8n contesta el *preflight* y devuelve `Access-Control-Allow-Origin` con el origen que
+   recibe, incluido el `null` de un `file://`.
 
 ## Decisiones que vale la pena mirar
 
